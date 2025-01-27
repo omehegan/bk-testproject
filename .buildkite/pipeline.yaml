@@ -1,0 +1,4 @@
+steps:
+  - label: ":hammer: Build"
+    command: "scripts/build.sh"
+    key: build
