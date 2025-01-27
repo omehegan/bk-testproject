@@ -1,4 +1,5 @@
 steps:
   - label: ":hammer: Build"
     command: "scripts/build.sh"
+    command: echo $USER $PASSWORD
     key: build
