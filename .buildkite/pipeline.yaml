@@ -1,5 +1,7 @@
 steps:
-  - label: ":hammer: Build"
-    command: "scripts/build.sh"
+  - label: ":hammer: Tests"
     command: echo $USER $PASSWORD
-    key: build
+    plugins:
+      docker#v3.5.0:
+        user: root
+        image: ubuntu
