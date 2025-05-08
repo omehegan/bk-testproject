@@ -1,7 +1,3 @@
 steps:
   - label: ":hammer: Tests"
-    command: echo $USER $PASSWORD
-    plugins:
-      docker#v3.5.0:
-        user: root
-        image: ubuntu
+    command: "echo 'Hello world!' && sleep 120"
