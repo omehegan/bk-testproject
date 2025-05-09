@@ -7,3 +7,5 @@ Adding some text.
 Some text added in a feature branch.
 
 New text.
+
+More text.
