@@ -4,4 +4,4 @@ steps:
     agents:
       location: "local"
     concurrency: 1
-    concurrency_group: $$BUILDKITE_AGENT_NAME
+    concurrency_group: "$$BUILDKITE_AGENT_NAME"
