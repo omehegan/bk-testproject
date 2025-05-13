@@ -1,6 +1,6 @@
 steps:
   - label: ":hammer: Tests"
-    command: "echo 'Hello world!' && sleep 120"
+    command: "echo 'Hello world!' && sleep 300"
     agents:
       location: "local"
     concurrency: 1
