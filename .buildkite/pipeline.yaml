@@ -1,7 +1,7 @@
 steps:
   - label: ":hammer: Tests"
-    command: "echo 'Hello world!' && sleep 300"
+    command: "echo 'Hello world!' && sleep 180"
     agents:
       location: "local"
     concurrency: 1
-    concurrency_group: ${BUILDKITE_AGENT_NAME}
+    concurrency_group: $$BUILDKITE_AGENT_NAME
