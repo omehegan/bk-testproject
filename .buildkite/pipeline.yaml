@@ -1,7 +1,8 @@
 steps:
-  - label: ":hammer: Tests"
-    command: "echo 'Hello world!' && sleep 180"
-    agents:
-      location: "local"
-    concurrency: 1
-    concurrency_group: "$$BUILDKITE_AGENT_NAME"
+  - label: "Build"
+    env:
+      BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: "s3://omehegan-bk-artifacts/$BUILDKITE_PIPELINE_ID/$BUILDKITE_BUILD_ID/$BUILDKITE_JOB_ID"
+      BUILDKITE_S3_DEFAULT_REGION: "ap-southeast-2"
+    command: "echo 'Hello world!' >> output.txt"
+    artifact_paths:
+      - "./output.txt"
