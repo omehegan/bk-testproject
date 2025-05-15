@@ -2,7 +2,7 @@ steps:
   - label: "Build"
     env:
       BUILDKITE_S3_ACL: "private"
-      BUILDKITE_S3_ACCESS_URL: "http://s3.console.aws.amazon.com/s3/buckets/omehegan-bk-artifacts"
+      BUILDKITE_S3_ACCESS_URL: "http://s3.console.aws.amazon.com/s3/buckets/omehegan-bk-artifacts/"
       BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: "s3://omehegan-bk-artifacts/$BUILDKITE_PIPELINE_ID/$BUILDKITE_BUILD_ID/$BUILDKITE_JOB_ID"
       BUILDKITE_S3_DEFAULT_REGION: "ap-southeast-2"
     command: "echo 'Hello world!' >> output.txt"
