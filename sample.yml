@@ -1,4 +1,5 @@
 env:
-  - TESTVAR=${MYVAR}
+  TESTVAR=$$MYVAR
+  
 steps:
   - command: "echo hello"
