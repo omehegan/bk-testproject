@@ -8,7 +8,7 @@ def signal_handler(signum, frame):
     print(f"Signal {signum} received.")
 
     print("Sleeping for 3 seconds.")
-    time.sleep(3)
+    time.sleep(15)
     print("Sleep done.")  # It has never gotten here.
 
     print("Exiting.")
