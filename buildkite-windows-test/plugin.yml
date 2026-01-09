@@ -1,0 +1,7 @@
+name: Windows Test
+description: A simple plugin to test cross-platform hook selection
+author: https://github.com/buildkite
+requirements: []
+configuration:
+  properties: {}
+  additionalProperties: false
