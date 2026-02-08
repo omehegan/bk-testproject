@@ -1,0 +1,221 @@
+# Converted from Bitbucket Pipelines: de4551ce-acae-4c54-9693-6e9c8d7280a2_input.yml
+# This pipeline demonstrates a Node.js monorepo with parallel test execution,
+# path-based conditional steps, and manual deployment approval.
+#
+# Migration Notes:
+# - Bitbucket's `image: node:20` → Docker plugin with YAML anchor
+# - Bitbucket's `definitions.caches` → cache plugin (commented examples below)
+# - Bitbucket's `condition.changesets.includePaths` → native `if_changed` attribute
+# - Bitbucket's `size: 2x` → agent queue targeting (configure in your cluster)
+# - Bitbucket's `options.max-time: 40` → `timeout_in_minutes` per step
+# - Bitbucket's `parallel:` blocks → Group with steps (run in parallel by default)
+# - Bitbucket's `pipelines.pull-requests` → Configure in Buildkite pipeline settings
+# - Bitbucket's `custom` pipelines → Block steps for manual approval
+# - Bitbucket's `services: [docker]` → Ensure agents have Docker-in-Docker capability
+#
+# IMPORTANT: `if_changed` is an agent-applied attribute. This YAML must be uploaded
+# via `buildkite-agent pipeline upload`, not pasted into the Buildkite UI.
+
+# Common configuration using YAML anchors
+common:
+  - docker_plugin: &docker-node
+      docker#:
+        image: "node:20"
+
+steps:
+  # ============================================================================
+  # Test Stage - Parallel Execution
+  # ============================================================================
+  - group: ":test_tube: Tests"
+    key: "tests"
+    steps:
+      # --- Build and Test Shared Packages ---
+      - label: ":package: Build and test shared packages"
+        key: "build-packages"
+        timeout_in_minutes: 40
+        if_changed:
+          - "packages/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "--- Building and testing shared packages"
+          echo "cd packages"
+          echo "npm install"
+          echo "npm run test"
+          echo "npm run build"
+        # Cache configuration (uncomment and adjust for your setup):
+        # plugins:
+        #   - cache#:
+        #       manifest: packages/package-lock.json
+        #       path: packages/node_modules
+        #       restore: file
+        #       save: file
+
+      # --- Client Unit Tests ---
+      - label: ":react: Unit test client"
+        key: "client-unit-test"
+        timeout_in_minutes: 40
+        if_changed:
+          - "ta-client/**"
+          - "ta-server/appsync/**"
+          - "packages/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "--- Running client unit tests"
+          echo "npm -v"
+          echo "npm install -g @aws-amplify/cli"
+          echo "cd packages && npm i && npm run build && cd .."
+          echo "cd ta-server && npm run bootstrap && cd .."
+          echo "cd ta-client"
+          echo "npm run bootstrap"
+          echo "npm run codegen"
+          echo "npm run test:ci"
+        # Note: Bitbucket used `size: 2x` - configure agent queue for larger resources
+        # agents:
+        #   queue: "large"
+        # Cache configuration (uncomment and adjust for your setup):
+        # plugins:
+        #   - cache#:
+        #       manifest: ta-client/package-lock.json
+        #       path: ta-client/node_modules
+        #       restore: file
+        #       save: file
+
+      # --- Server Unit Tests ---
+      - label: ":nodejs: Unit test server"
+        key: "server-unit-test"
+        timeout_in_minutes: 40
+        if_changed:
+          - "ta-server/**"
+          - "packages/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "--- Running server unit tests"
+          echo "npm -v"
+          echo "cd packages && npm i && npm run build && cd .."
+          echo "cd ta-server"
+          echo "npm run bootstrap"
+          echo "npm run codegen"
+          echo "npm run test:ci"
+        # Note: Bitbucket used `size: 2x` - configure agent queue for larger resources
+        # agents:
+        #   queue: "large"
+        # Cache configuration (uncomment and adjust for your setup):
+        # plugins:
+        #   - cache#:
+        #       manifest: ta-server/package-lock.json
+        #       path: ta-server/node_modules
+        #       restore: file
+        #       save: file
+
+      # --- Server Integration Tests ---
+      - label: ":mysql: Integration test server"
+        key: "server-integration-test"
+        timeout_in_minutes: 40
+        if_changed:
+          - "ta-server/**"
+          - "packages/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "--- Starting MySQL 8.4 container"
+          echo "docker run -d --name mysql84 \\"
+          echo "  -e MYSQL_DATABASE=integration_test \\"
+          echo "  -e MYSQL_ROOT_PASSWORD=root \\"
+          echo "  -p 3306:3306 \\"
+          echo "  -v \"\$PWD/ta-server/db/test/load:/docker-entrypoint-initdb.d\" \\"
+          echo "  mysql:8.4 \\"
+          echo "  --innodb-ft-min-token-size=1 \\"
+          echo "  --innodb-ft-enable-stopword=OFF \\"
+          echo "  --skip-log-bin \\"
+          echo "  --character-set-server=utf8mb4 \\"
+          echo "  --collation-server=utf8mb4_0900_ai_ci \\"
+          echo "  --log-bin-trust-function-creators=1"
+          echo ""
+          echo "--- Installing MySQL client"
+          echo "apt-get update && apt-get install -y default-mysql-client"
+          echo ""
+          echo "--- Waiting for MySQL to be ready"
+          echo "until mysql -h127.0.0.1 -uroot -proot -e 'SELECT 1'; do sleep 5; done"
+          echo ""
+          echo "--- Running integration tests"
+          echo "npm -v"
+          echo "cd packages && npm i && npm run build && cd .."
+          echo "npm i -g nps"
+          echo "cd ta-server"
+          echo "npm run bootstrap"
+          echo "npm run codegen"
+          echo "nps db-migrate.load && nps db-migrate.test && npm run integration-test"
+        # Note: Bitbucket used `size: 2x` - configure agent queue for larger resources
+        # Note: Bitbucket used `services: [docker]` - ensure agents have Docker-in-Docker
+        # agents:
+        #   queue: "large-dind"
+        # Cache configuration (uncomment and adjust for your setup):
+        # plugins:
+        #   - cache#:
+        #       manifest: ta-server/package-lock.json
+        #       path: ta-server/node_modules
+        #       restore: file
+        #       save: file
+
+  # ============================================================================
+  # Audit Stage - Runs after tests on release branches only
+  # ============================================================================
+  - label: ":lock: Audit dependencies"
+    key: "audit"
+    depends_on: "tests"
+    branches: "release-*"
+    timeout_in_minutes: 40
+    plugins:
+      - <<: *docker-node
+    command: |
+      echo "--- Auditing dependencies"
+      echo "cd packages && npm i && npm run build && cd .."
+      echo "npm cache clean --force"
+      echo "npm i -g lerna@5.5.0"
+      echo "npm i -g nps"
+      echo ""
+      echo "--- Auditing client dependencies"
+      echo "cd ta-client"
+      echo "npm run bootstrap"
+      echo "npm run audit:ignore"
+      echo ""
+      echo "--- Auditing server dependencies"
+      echo "cd ../ta-server"
+      echo "npm run bootstrap"
+      echo "npm run codegen"
+      echo "npm run audit:ignore"
+    # Cache configuration (uncomment and adjust for your setup):
+    # plugins:
+    #   - cache#:
+    #       manifest: ta-client/package-lock.json
+    #       path: ta-client/node_modules
+    #       restore: file
+    #       save: file
+    #   - cache#:
+    #       manifest: ta-server/package-lock.json
+    #       path: ta-server/node_modules
+    #       restore: file
+    #       save: file
+
+  # ============================================================================
+  # Manual Deployment - QA Environment
+  # ============================================================================
+  # Note: In Bitbucket this was a `custom` pipeline triggered manually.
+  # In Buildkite, use a block step for manual approval gates.
+  - block: ":rocket: Deploy to QA"
+    prompt: "Ready to deploy to QA environment?"
+    branches: "release-*"
+
+  - label: ":aws: Deploy to QA"
+    key: "deploy-qa"
+    branches: "release-*"
+    timeout_in_minutes: 40
+    plugins:
+      - <<: *docker-node
+    command: |
+      echo "--- Deploying to QA environment"
+      echo "cd deployment"
+      echo "./qa-deploy.sh"
