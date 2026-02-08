@@ -1,0 +1,180 @@
+# Converted from Bitbucket Pipelines
+# Original features:
+#   - Global image: node:20
+#   - Custom caches (server-node, client-node, packages-node)
+#   - Conditional changesets (file path filtering)
+#   - Parallel test execution
+#   - Branch filtering (release-*, pull-requests)
+#   - Custom deploy pipeline (requires manual trigger via Buildkite UI or API)
+#   - Global timeout: 40 minutes
+#
+# Notes:
+#   - Caching: Requires cache plugin configuration or agent-level caching setup.
+#     Comment placeholders included - uncomment and configure based on your infrastructure.
+#   - Changeset conditions: Converted to native if_changed attribute (agent v3.103+).
+#   - Custom pipelines: Bitbucket's "custom" pipelines are manual triggers.
+#     In Buildkite, create a separate pipeline or use an input step for manual deployments.
+#   - Pull request builds: Configure "Build pull requests" in Buildkite pipeline settings.
+
+# Common configuration (ignored by Buildkite, used for YAML anchors)
+common:
+  - docker_plugin: &docker-node
+      docker#:
+        image: "node:20"
+
+steps:
+  #############################################################################
+  # PARALLEL TEST GROUP
+  # Runs on: release-* branches and pull requests
+  # These steps run in parallel by default (no depends_on between them)
+  #############################################################################
+
+  - group: ":test_tube: Tests"
+    key: "tests"
+    steps:
+      - label: ":package: Build and test shared packages"
+        key: "build-test-shared-packages"
+        if_changed:
+          - "packages/**"
+        command: |
+          echo "=== Building and testing shared packages ==="
+          echo "[STUB] cd packages"
+          echo "[STUB] npm install"
+          echo "[STUB] npm run test"
+          echo "[STUB] npm run build"
+        plugins:
+          - <<: *docker-node
+        timeout_in_minutes: 40
+        # Cache configuration - uncomment and adjust for your setup:
+        # - cache#:
+        #     key: "v1-packages-node-{{ checksum 'packages/package-lock.json' }}"
+        #     paths:
+        #       - "packages/node_modules"
+
+      - label: ":mag: Unit test client"
+        key: "client-unit-test"
+        if_changed:
+          - "ta-client/**"
+          - "ta-server/appsync/**"
+          - "packages/**"
+        command: |
+          echo "=== Running client unit tests ==="
+          echo "[STUB] npm -v"
+          echo "[STUB] npm install -g @aws-amplify/cli"
+          echo "[STUB] cd packages && npm i && npm run build && cd .."
+          echo "[STUB] cd ta-server && npm run bootstrap && cd .."
+          echo "[STUB] cd ta-client"
+          echo "[STUB] npm run bootstrap"
+          echo "[STUB] npm run codegen"
+          echo "[STUB] npm run test:ci"
+        plugins:
+          - <<: *docker-node
+        timeout_in_minutes: 40
+        # Cache configuration - uncomment and adjust for your setup:
+        # - cache#:
+        #     key: "v1-client-node-{{ checksum 'ta-client/package-lock.json' }}"
+        #     paths:
+        #       - "ta-client/node_modules"
+
+      - label: ":gear: Unit test server"
+        key: "server-unit-test"
+        if_changed:
+          - "ta-server/**"
+          - "packages/**"
+        command: |
+          echo "=== Running server unit tests ==="
+          echo "[STUB] npm -v"
+          echo "[STUB] cd packages && npm i && npm run build && cd .."
+          echo "[STUB] cd ta-server"
+          echo "[STUB] npm run bootstrap"
+          echo "[STUB] npm run codegen"
+          echo "[STUB] npm run test:ci"
+        plugins:
+          - <<: *docker-node
+        timeout_in_minutes: 40
+        # Cache configuration - uncomment and adjust for your setup:
+        # - cache#:
+        #     key: "v1-server-node-{{ checksum 'ta-server/package-lock.json' }}"
+        #     paths:
+        #       - "ta-server/node_modules"
+
+      - label: ":database: Integration test server"
+        key: "server-integration-test"
+        if_changed:
+          - "ta-server/**"
+          - "packages/**"
+        command: |
+          echo "=== Running server integration tests with MySQL ==="
+          echo "[STUB] Starting MySQL 8.4 container..."
+          echo "[STUB] docker run -d --name mysql84 \\"
+          echo "[STUB]   -e MYSQL_DATABASE=integration_test \\"
+          echo "[STUB]   -e MYSQL_ROOT_PASSWORD=root \\"
+          echo "[STUB]   -p 3306:3306 \\"
+          echo "[STUB]   mysql:8.4"
+          echo "[STUB] apt-get update && apt-get install -y default-mysql-client"
+          echo "[STUB] Waiting for MySQL to be ready..."
+          echo "[STUB] npm -v"
+          echo "[STUB] cd packages && npm i && npm run build && cd .."
+          echo "[STUB] npm i -g nps"
+          echo "[STUB] cd ta-server"
+          echo "[STUB] npm run bootstrap"
+          echo "[STUB] npm run codegen"
+          echo "[STUB] nps db-migrate.load && nps db-migrate.test && npm run integration-test"
+        plugins:
+          - <<: *docker-node
+        timeout_in_minutes: 40
+        # Note: Original used Bitbucket's Docker-in-Docker service.
+        # For Buildkite, ensure your agents have Docker available, or use
+        # the docker-compose plugin for service containers.
+
+  #############################################################################
+  # AUDIT STEP
+  # Runs on: release-* branches only, after tests complete
+  #############################################################################
+
+  - label: ":shield: Audit dependencies"
+    key: "audit-step"
+    depends_on: "tests"
+    branches: "release-*"
+    command: |
+      echo "=== Auditing dependencies ==="
+      echo "[STUB] cd packages && npm i && npm run build && cd .."
+      echo "[STUB] npm cache clean --force"
+      echo "[STUB] npm i -g lerna@5.5.0"
+      echo "[STUB] npm i -g nps"
+      echo "[STUB] cd ta-client"
+      echo "[STUB] npm run bootstrap"
+      echo "[STUB] npm run audit:ignore"
+      echo "[STUB] cd ../ta-server"
+      echo "[STUB] npm run bootstrap"
+      echo "[STUB] npm run codegen"
+      echo "[STUB] npm run audit:ignore"
+    plugins:
+      - <<: *docker-node
+    timeout_in_minutes: 40
+
+  #############################################################################
+  # MANUAL DEPLOYMENT TO QA
+  # Original: Bitbucket custom pipeline "deploy-to-qa"
+  # In Buildkite: Use a block step for manual approval, filtered to specific branches
+  # Alternatively, create a separate pipeline triggered via UI/API
+  #############################################################################
+
+  - block: ":rocket: Deploy to QA?"
+    key: "deploy-qa-approval"
+    branches: "release-* main"
+    prompt: "This will deploy to the QA environment. Continue?"
+
+  - label: ":rocket: Deploy to QA"
+    key: "deploy-to-qa"
+    depends_on: "deploy-qa-approval"
+    branches: "release-* main"
+    command: |
+      echo "=== Deploying to QA environment ==="
+      echo "[STUB] cd deployment"
+      echo "[STUB] ./qa-deploy.sh"
+    env:
+      DEPLOYMENT_ENV: qa
+    concurrency: 1
+    concurrency_group: "deploy-qa"
+    timeout_in_minutes: 40
