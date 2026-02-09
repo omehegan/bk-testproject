@@ -1,0 +1,304 @@
+# Converted from Bitbucket Pipelines: Python Django Application
+# Source: ~/source/competitor-pipeline-samples/bitbucket/samples/python-django-example_input.yml
+#
+# Migration Notes:
+# - image: python:3.11 → docker# plugin with YAML anchor
+# - definitions.caches → cache# plugin (commented, requires S3/GCS bucket)
+# - definitions.services → Buildkite supports Docker Compose or agent-side services
+# - parallel blocks → steps in same group without depends_on
+# - condition.changesets.includePaths → if_changed (agent-applied attribute)
+# - deployment environments → block steps with manual approval
+# - trigger: manual → block step before deployment
+# - size: 2x → agent queue targeting (e.g., queue=large)
+# - options.max-time → timeout_in_minutes on steps
+# - Bitbucket pipes → equivalent shell commands or Buildkite plugins
+# - Custom pipelines with variables → block steps with select/text fields
+
+common:
+  - docker_plugin: &docker-python
+      docker#:
+        image: "python:3.11"
+        propagate-environment: true
+
+  - docker_plugin: &docker-node
+      docker#:
+        image: "node:20"
+        propagate-environment: true
+
+env:
+  # Database configuration for integration tests
+  DATABASE_URL: "postgresql://testuser:testpass@localhost:5432/testdb"
+  REDIS_URL: "redis://localhost:6379"
+
+steps:
+  # ============================================================
+  # STAGE 1: Linting (Parallel)
+  # ============================================================
+  - group: ":mag: Linting"
+    key: "linting"
+    steps:
+      - label: ":python: Lint Python Code"
+        key: "lint-python"
+        timeout_in_minutes: 30
+        plugins:
+          - <<: *docker-python
+        command: |
+          echo "=== Installing Python linting tools ==="
+          echo "pip install flake8 black isort"
+          echo ""
+          echo "=== Running flake8 ==="
+          echo "flake8 src/ tests/"
+          echo ""
+          echo "=== Checking black formatting ==="
+          echo "black --check src/ tests/"
+          echo ""
+          echo "=== Checking import sorting ==="
+          echo "isort --check-only src/ tests/"
+        # Uncomment when cache bucket is configured:
+        # plugins:
+        #   - cache#:
+        #       backend: s3
+        #       key: "pip-cache-{{ checksum 'requirements.txt' }}-{{ checksum 'requirements-dev.txt' }}"
+        #       paths:
+        #         - ~/.cache/pip
+
+      - label: ":javascript: Lint Frontend Code"
+        key: "lint-frontend"
+        timeout_in_minutes: 30
+        if_changed:
+          - "frontend/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "=== Installing frontend dependencies ==="
+          echo "cd frontend && npm ci"
+          echo ""
+          echo "=== Running ESLint ==="
+          echo "npm run lint"
+          echo ""
+          echo "=== Running TypeScript type check ==="
+          echo "npm run type-check"
+        # Uncomment when cache bucket is configured:
+        # plugins:
+        #   - cache#:
+        #       backend: s3
+        #       key: "frontend-npm-{{ checksum 'frontend/package-lock.json' }}"
+        #       paths:
+        #         - frontend/node_modules
+
+  # ============================================================
+  # STAGE 2: Tests & Build (Parallel)
+  # ============================================================
+  - wait
+
+  - group: ":test_tube: Tests & Build"
+    key: "tests"
+    steps:
+      - label: ":pytest: Unit Tests"
+        key: "unit-tests"
+        timeout_in_minutes: 30
+        # Note: Bitbucket size: 2x - target a larger agent queue if needed
+        # agents:
+        #   queue: "large"
+        plugins:
+          - <<: *docker-python
+        command: |
+          echo "=== Installing dependencies ==="
+          echo "pip install -r requirements.txt -r requirements-dev.txt"
+          echo ""
+          echo "=== Running unit tests with coverage ==="
+          echo "pytest tests/unit/ -v --junitxml=test-results/unit.xml --cov=src --cov-report=xml"
+        artifact_paths:
+          - "test-results/**/*"
+          - "coverage.xml"
+
+      - label: ":database: Integration Tests"
+        key: "integration-tests"
+        timeout_in_minutes: 30
+        # Note: Bitbucket size: 2x - target a larger agent queue if needed
+        # agents:
+        #   queue: "large"
+        #
+        # Note: This step requires PostgreSQL and Redis services.
+        # Options:
+        # 1. Use docker-compose plugin
+        # 2. Run services on the agent
+        # 3. Use a dedicated integration test queue with services pre-configured
+        plugins:
+          - <<: *docker-python
+          # Example with docker-compose:
+          # - docker-compose#:
+          #     run: app
+          #     config: docker-compose.test.yml
+        command: |
+          echo "=== Installing dependencies ==="
+          echo "pip install -r requirements.txt -r requirements-dev.txt"
+          echo ""
+          echo "=== Setting up database connection ==="
+          echo "export DATABASE_URL=postgresql://testuser:testpass@postgres:5432/testdb"
+          echo "export REDIS_URL=redis://redis:6379"
+          echo ""
+          echo "=== Running database migrations ==="
+          echo "python manage.py migrate --noinput"
+          echo ""
+          echo "=== Running integration tests ==="
+          echo "pytest tests/integration/ -v --junitxml=test-results/integration.xml"
+        artifact_paths:
+          - "test-results/**/*"
+
+      - label: ":package: Build Frontend"
+        key: "build-frontend"
+        timeout_in_minutes: 30
+        if_changed:
+          - "frontend/**"
+        plugins:
+          - <<: *docker-node
+        command: |
+          echo "=== Installing frontend dependencies ==="
+          echo "cd frontend && npm ci"
+          echo ""
+          echo "=== Building frontend for production ==="
+          echo "npm run build"
+        artifact_paths:
+          - "frontend/dist/**/*"
+
+  # ============================================================
+  # STAGE 3: Security Scan
+  # ============================================================
+  - wait
+
+  - label: ":shield: Security Scan"
+    key: "security-scan"
+    timeout_in_minutes: 30
+    plugins:
+      - <<: *docker-python
+    command: |
+      echo "=== Installing security scanning tools ==="
+      echo "pip install safety bandit"
+      echo ""
+      echo "=== Checking dependencies for known vulnerabilities ==="
+      echo "safety check -r requirements.txt"
+      echo ""
+      echo "=== Running static security analysis ==="
+      echo "bandit -r src/ -f json -o security-report.json || true"
+    artifact_paths:
+      - "security-report.json"
+
+  # ============================================================
+  # STAGE 4: Build Docker Image (main and release branches only)
+  # ============================================================
+  - wait
+
+  - label: ":docker: Build Docker Image"
+    key: "build-docker"
+    timeout_in_minutes: 30
+    branches: "main release/*"
+    # Note: Requires Docker-in-Docker capable agent
+    # agents:
+    #   queue: "docker-builder"
+    command: |
+      echo "=== Building Docker image ==="
+      echo "export IMAGE_TAG=\${BUILDKITE_COMMIT:0:7}"
+      echo "docker build -t myapp:\${IMAGE_TAG} ."
+      echo ""
+      echo "=== Saving Docker image as artifact ==="
+      echo "docker save myapp:\${IMAGE_TAG} -o docker-image.tar"
+    artifact_paths:
+      - "docker-image.tar"
+
+  # ============================================================
+  # STAGE 5: Deploy to Staging (main and release branches, manual approval)
+  # ============================================================
+  - wait
+
+  - block: ":rocket: Deploy to Staging"
+    key: "staging-approval"
+    branches: "main release/*"
+    prompt: "Ready to deploy to staging environment?"
+
+  - label: ":aws: Deploy to Staging"
+    key: "deploy-staging"
+    depends_on: "staging-approval"
+    branches: "main release/*"
+    timeout_in_minutes: 30
+    # Note: Converted from Atlassian aws-ecs-deploy pipe
+    # Requires AWS credentials configured on agent or via environment hooks
+    command: |
+      echo "=== Deploying to Staging ==="
+      echo "Cluster: staging-cluster"
+      echo "Service: myapp-staging"
+      echo ""
+      echo "=== Loading Docker image ==="
+      echo "docker load -i docker-image.tar"
+      echo ""
+      echo "=== Pushing to ECR ==="
+      echo "aws ecr get-login-password | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com"
+      echo "docker tag myapp:\${BUILDKITE_COMMIT:0:7} <account>.dkr.ecr.us-east-1.amazonaws.com/myapp:\${BUILDKITE_COMMIT:0:7}"
+      echo "docker push <account>.dkr.ecr.us-east-1.amazonaws.com/myapp:\${BUILDKITE_COMMIT:0:7}"
+      echo ""
+      echo "=== Updating ECS service ==="
+      echo "aws ecs update-service --cluster staging-cluster --service myapp-staging --force-new-deployment"
+
+  # ============================================================
+  # STAGE 6: Deploy to Production (release branches only, manual approval)
+  # ============================================================
+  - block: ":warning: Deploy to Production"
+    key: "production-approval"
+    branches: "release/*"
+    prompt: "Are you sure you want to deploy to PRODUCTION?"
+    fields:
+      - text: "Deployment Notes"
+        key: "deployment-notes"
+        hint: "Any notes about this deployment"
+        required: false
+
+  - label: ":aws: Deploy to Production"
+    key: "deploy-production"
+    depends_on: "production-approval"
+    branches: "release/*"
+    timeout_in_minutes: 30
+    command: |
+      echo "=== Deploying to Production ==="
+      echo "Cluster: production-cluster"
+      echo "Service: myapp-production"
+      echo ""
+      echo "=== Deployment Notes: \$BUILDKITE_PARALLEL_JOB_COUNT ==="
+      echo "buildkite-agent meta-data get deployment-notes || echo 'No notes provided'"
+      echo ""
+      echo "=== Loading Docker image ==="
+      echo "docker load -i docker-image.tar"
+      echo ""
+      echo "=== Pushing to ECR ==="
+      echo "aws ecr get-login-password | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com"
+      echo "docker tag myapp:\${BUILDKITE_COMMIT:0:7} <account>.dkr.ecr.us-east-1.amazonaws.com/myapp:\${BUILDKITE_COMMIT:0:7}"
+      echo "docker push <account>.dkr.ecr.us-east-1.amazonaws.com/myapp:\${BUILDKITE_COMMIT:0:7}"
+      echo ""
+      echo "=== Updating ECS service ==="
+      echo "aws ecs update-service --cluster production-cluster --service myapp-production --force-new-deployment"
+
+# ============================================================
+# CUSTOM PIPELINES (Triggered Manually via Buildkite UI or API)
+# ============================================================
+# Note: Bitbucket custom pipelines are converted to separate pipeline files
+# or triggered via the Buildkite API with specific environment variables.
+#
+# To replicate Bitbucket's custom pipelines:
+# 1. Create separate pipeline files (e.g., pipeline-rollback.yml)
+# 2. Use block steps with input fields for variables
+# 3. Trigger via API: buildkite-agent pipeline upload pipeline-rollback.yml
+#
+# Example: Rollback Production
+# Create .buildkite/pipeline-rollback.yml with:
+#
+# steps:
+#   - block: ":rewind: Rollback Production"
+#     fields:
+#       - text: "Rollback Version"
+#         key: "rollback-version"
+#         hint: "Docker image tag to rollback to"
+#         required: true
+#   - label: ":aws: Rollback Production"
+#     command: |
+#       ROLLBACK_VERSION=$(buildkite-agent meta-data get "rollback-version")
+#       echo "Rolling back to version $ROLLBACK_VERSION"
+#       aws ecs update-service --cluster production-cluster --service myapp-production --task-definition myapp:$ROLLBACK_VERSION
