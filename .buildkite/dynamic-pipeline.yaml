@@ -1,0 +1,15 @@
+steps:
+  - label: "Build and Unit Test"
+    command: |
+      echo "=== Build and Unit Test ==="
+      echo "This step should only run if files in app/ changed"
+      echo "Changed files detected by if_changed:"
+      git diff --name-only --merge-base origin/main
+    if_changed:
+      include:
+        - "app/**"
+      exclude:
+        - "excluded/**"
+
+  - label: "Always runs"
+    command: echo "This step always runs (no if_changed)"
