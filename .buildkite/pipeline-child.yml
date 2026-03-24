@@ -1,0 +1,21 @@
+steps:
+  - label: ":child: Child Build Step"
+    command: |
+      echo "=== Child Build Debug Info ==="
+      echo "BUILDKITE_COMMIT: $BUILDKITE_COMMIT"
+      echo "BUILDKITE_BRANCH: $BUILDKITE_BRANCH"
+      echo "BUILDKITE_PULL_REQUEST: $BUILDKITE_PULL_REQUEST"
+      echo "BUILDKITE_PULL_REQUEST_BASE_BRANCH: $BUILDKITE_PULL_REQUEST_BASE_BRANCH"
+      echo "BUILDKITE_PULL_REQUEST_REPO: $BUILDKITE_PULL_REQUEST_REPO"
+      echo "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC: $BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC"
+      echo "Git HEAD: $(git rev-parse HEAD)"
+      echo "Git log (last 5):"
+      git log --oneline -5
+      echo ""
+      echo "=== Checking if HEAD is a merge commit ==="
+      git cat-file -p HEAD | head -5
+      echo ""
+      echo "=== Parent commits of HEAD ==="
+      git rev-parse HEAD^1 2>/dev/null && echo "(first parent)"
+      git rev-parse HEAD^2 2>/dev/null && echo "(second parent - merge commit detected)"
+      echo "=== End Debug Info ==="

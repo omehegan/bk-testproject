@@ -1,0 +1,41 @@
+steps:
+  - label: ":hammer: Parent Build Step"
+    command: |
+      echo "=== Parent Build Debug Info ==="
+      echo "BUILDKITE_COMMIT: $BUILDKITE_COMMIT"
+      echo "BUILDKITE_BRANCH: $BUILDKITE_BRANCH"
+      echo "BUILDKITE_PULL_REQUEST: $BUILDKITE_PULL_REQUEST"
+      echo "BUILDKITE_PULL_REQUEST_BASE_BRANCH: $BUILDKITE_PULL_REQUEST_BASE_BRANCH"
+      echo "BUILDKITE_PULL_REQUEST_REPO: $BUILDKITE_PULL_REQUEST_REPO"
+      echo "Git HEAD: $(git rev-parse HEAD)"
+      echo "Git log (last 3):"
+      git log --oneline -3
+      echo "=== End Debug Info ==="
+
+  - wait
+
+  # Trigger child with commit: HEAD (reproduces the customer's issue)
+  - label: ":rocket: Trigger child (commit: HEAD)"
+    trigger: merge-commit-child
+    build:
+      env:
+        BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
+        BUILDKITE_PULL_REQUEST_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+        BUILDKITE_PULL_REQUEST_BASE_BRANCH: "${BUILDKITE_PULL_REQUEST_BASE_BRANCH}"
+        BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC: 'true'
+      branch: "${BUILDKITE_BRANCH}"
+      commit: "HEAD"
+      message: "Child build triggered from parent (commit: HEAD)"
+
+  # Trigger child with explicit commit SHA (for comparison)
+  - label: ":rocket: Trigger child (explicit SHA)"
+    trigger: merge-commit-child
+    build:
+      env:
+        BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
+        BUILDKITE_PULL_REQUEST_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+        BUILDKITE_PULL_REQUEST_BASE_BRANCH: "${BUILDKITE_PULL_REQUEST_BASE_BRANCH}"
+        BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC: 'true'
+      branch: "${BUILDKITE_BRANCH}"
+      commit: "${BUILDKITE_COMMIT}"
+      message: "Child build triggered from parent (explicit SHA)"
