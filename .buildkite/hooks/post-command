@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo "--- :hook: post-command hook running"
+echo "BUILDKITE_COMMAND_EXIT_STATUS: $BUILDKITE_COMMAND_EXIT_STATUS"
+echo "BUILDKITE_JOB_CANCELLED: $BUILDKITE_JOB_CANCELLED"
+
+if [[ "$BUILDKITE_JOB_CANCELLED" == "true" ]]; then
+  echo "Job was cancelled/timed out. Exiting with status 90 for soft_fail."
+  exit 90
+fi

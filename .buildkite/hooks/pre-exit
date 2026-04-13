@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "--- :hook: pre-exit hook running"
+echo "BUILDKITE_COMMAND_EXIT_STATUS: $BUILDKITE_COMMAND_EXIT_STATUS"
+echo "BUILDKITE_LAST_HOOK_EXIT_STATUS: $BUILDKITE_LAST_HOOK_EXIT_STATUS"
+echo "Pre-exit is a no-op (matching customer setup)"
