@@ -10,7 +10,7 @@ steps:
       echo "+++ :rspec: Running specs with bktec"
       bktec run
     env:
-      BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: "c5Vj5ibn5sCurLNVksFPpUE9"
+      BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: "bkua_0ecd3d838aa96fc86ef3943b22217bbc8e4dded1"
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: "split-by-example-repro"
       BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE: "true"
       BUILDKITE_TEST_ENGINE_TEST_RUNNER: "rspec"
