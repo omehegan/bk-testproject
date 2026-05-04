@@ -1,0 +1,23 @@
+steps:
+  - label: ":rspec: RSpec split-by-example test"
+    command: |
+      set -euo pipefail
+      cd "$$BUILDKITE_BUILD_CHECKOUT_PATH"
+
+      echo "--- :ruby: Install dependencies"
+      bundle install --jobs=4
+
+      echo "+++ :rspec: Running specs with bktec"
+      bktec run
+    env:
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: "split-by-example-repro"
+      BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE: "true"
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: "rspec"
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: "tmp/bktec-rspec.json"
+      BUILDKITE_TEST_ENGINE_DEBUG_ENABLED: "true"
+      BUILDKITE_TEST_ENGINE_RETRY_COUNT: "0"
+    parallelism: 3
+    agents:
+      queue: "default"
+    artifact_paths:
+      - "tmp/**/*"
