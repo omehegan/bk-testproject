@@ -8,7 +8,7 @@ steps:
       bundle install --jobs=4
 
       echo "--- :key: Set up API token"
-      export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN="$TEST_ENGINE_API_ACCESS_TOKEN"
+      export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN="$(buildkite-agent secret get TEST_ENGINE_API_ACCESS_TOKEN)"
 
       echo "+++ :rspec: Running specs with bktec"
       bktec run
