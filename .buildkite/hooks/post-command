@@ -2,9 +2,15 @@
 
 echo "--- :hook: post-command hook running"
 echo "BUILDKITE_COMMAND_EXIT_STATUS: $BUILDKITE_COMMAND_EXIT_STATUS"
-echo "BUILDKITE_JOB_CANCELLED: $BUILDKITE_JOB_CANCELLED"
+echo "Simulating heavy post-command work (OTEL export, coverage upload, etc.)"
+echo "Sleeping 55s to exceed the 50s signal grace period..."
 
-if [[ "$BUILDKITE_JOB_CANCELLED" == "true" ]]; then
-  echo "Job was cancelled/timed out. Exiting with status 90 for soft_fail."
-  exit 90
-fi
+# This simulates a customer's post-command hook that does heavy work
+# (e.g., OTEL span export, coverage reporting, artifact uploads)
+# which consumes most of the signal grace period.
+for i in $(seq 1 55); do
+  echo "post-command: second $i of 55"
+  sleep 1
+done
+
+echo "post-command: done sleeping"
