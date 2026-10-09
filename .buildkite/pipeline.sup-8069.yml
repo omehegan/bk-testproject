@@ -1,0 +1,13 @@
+env:
+  PR_COMMENTER_GITHUB_TOKEN: dummy-token-for-sup-8069
+
+steps:
+  - label: ":test_tube: SUP-8069 token-env end-to-end"
+    key: "sup-8069-token-env"
+    command: 'echo "Testing PR Commenter token-env resolution"'
+    agents:
+      queue: "default"
+    plugins:
+      - https://github.com/buildkite-plugins/pr-commenter-buildkite-plugin.git#sup-8069/token-env-support:
+          token-env: PR_COMMENTER_GITHUB_TOKEN
+          message: "SUP-8069 token-env end-to-end test"
