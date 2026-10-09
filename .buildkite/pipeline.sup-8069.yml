@@ -7,6 +7,7 @@ steps:
     command: 'echo "Testing PR Commenter token-env resolution"'
     agents:
       queue: "aws"
+      sup-8069: "true"
     plugins:
       - https://github.com/buildkite-plugins/pr-commenter-buildkite-plugin.git#sup-8069/token-env-support:
           token-env: PR_COMMENTER_GITHUB_TOKEN
